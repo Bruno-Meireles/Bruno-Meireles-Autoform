@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoFormTester Tupiniquim</title>
+    <style>
+        body {
+            width: 300px;
+            padding: 20px;
+            font-family: 'Ubuntu', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background: #FFFFFF;
+            color: #333333;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            margin: 0 0 5px 0;
+            font-weight: 600;
+            color: #007a42;
+        }
+
+        .header p {
+            font-size: 12px;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .config-section {
+            background: rgba(240, 240, 240, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(0, 147, 78, 0.1);
+        }
+
+        .config-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            opacity: 0.9;
+            color: #007a42;
+        }
+
+        .config-input {
+            width: calc(100% - 16px);
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(0, 147, 78, 0.3);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.8);
+            color: #333333;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .save-button {
+            background: #00934e;
+            color: white;
+            border: 1px solid #007a42;
+        }
+
+        .save-button:hover {
+            background: #007a42;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .edit-button {
+            background: #f0f0f0;
+            color: #007a42;
+            border: 1px solid #007a42;
+        }
+
+        .edit-button:hover {
+            background: #e0e0e0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .url-section {
+            background: rgba(240, 240, 240, 0.8);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(0, 147, 78, 0.1);
+        }
+
+        .url-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            opacity: 0.9;
+            color: #007a42;
+        }
+
+        .url-display {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid rgba(0, 147, 78, 0.1);
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 11px;
+            word-break: break-all;
+            max-height: 60px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+            color: #333333;
+        }
+
+        .button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-family: 'Ubuntu', sans-serif;
+        }
+
+        .copy-button,
+        .fill-button {
+            background: #e0ffe0; /* Verde muito claro */
+            color: #007a42; /* Verde escuro para o texto */
+            border: 1px solid #00934e; /* Borda verde */
+        }
+
+        .copy-button:hover,
+        .fill-button:hover {
+            background: #c0ffc0; /* Verde um pouco mais escuro no hover */
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .custom-url-button {
+            background: #fffacd; /* Amarelo claro */
+            color: #007a42; /* Verde escuro para o texto */
+            border: 1px solid #00934e; /* Borda verde */
+            font-weight: 700;
+        }
+
+        .custom-url-button:hover {
+            background: #ffebcd; /* Amarelo um pouco mais escuro no hover */
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .success-message {
+            background: rgba(0, 147, 78, 0.1);
+            border: 1px solid rgba(0, 147, 78, 0.3);
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            color: #007a42;
+        }
+
+        .success-message.show {
+            opacity: 1;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 10px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AutoFormTester Tupiniquim</h1>
+        <p>Ferramenta de teste de formulários</p>
+    </div>
+
+    <div class="config-section">
+        <div class="config-label">Seu Nome para Testes:</div>
+        <input type="text" id="userNameInput" placeholder="Ex: Maria Silva" class="config-input">
+        <button class="button save-button" id="saveNameButton">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm.5-9H11v4h1.5v-4zM15 9V5.5L10.5 10H15z"/>
+            </svg>
+            Salvar Nome
+        </button>
+    </div>
+
+    <div class="url-section">
+        <div class="url-label">URL para Copiar:</div>
+        <div class="url-display" id="urlDisplay">
+            /?matchtype=matchtypeValue&device=deviceValue&adposition=adpositionValue&placement=placementValue&targetid=targetidValue&feeditemid=feeditemidValue&adgroupid=adgroupidValue&target=targetValue&gclid=gclidValue&utm_term=utm_termValue&utm_content=utm_contentValue&utm_id=utm_idValue&utm_source_platform=utm_source_platformValue&utm_source=utm_sourceValue&utm_campaign=utm_campaignValue&devicemodel=devicemodelValue&utm_medium=utm_mediumValue
+        </div>
+        
+        <button class="button copy-button" id="copyButton">
+            <svg class="icon" viewBox="0 0 24 24">
+                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+            Copiar URL
+        </button>
+    </div>
+
+    <button class="button custom-url-button" id="customUrlButton">
+        <svg class="icon" viewBox="0 0 24 24">
+            <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H6.9C4.01 7 1.9 9.11 1.9 12s2.11 5 5 5h4v-1.9H6.9c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9.1-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.89 0 5-2.11 5-5s-2.11-5-5-5z"/>
+        </svg>
+        Copiar URL Personalizada
+    </button>
+
+    <button class="button fill-button" id="fillButton">
+        <svg class="icon" viewBox="0 0 24 24">
+            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+        Preencher Formulário
+    </button>
+
+    <div class="success-message" id="successMessage"></div>
+
+    <div class="footer">
+        v1.1.0 - Clique nos botões para usar
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
+
