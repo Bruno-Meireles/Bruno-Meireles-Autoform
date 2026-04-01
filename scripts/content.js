@@ -1,286 +1,290 @@
-// AutoFormTester Tupiniquim - Content Script v1.6.0
+// AutoFormTester Tupiniquim - Content Script v1.7.1
+// Correção anti-SPAM: delays humanizados, honeypot expandido, React/Vue support
+// v1.7.1: e-mail gerado a partir do nome preenchido no formulário
 
 (function() {
-    // Verifica se o script já foi injetado para evitar duplicação
     if (window.hasAutoFormTester) {
         console.log("AutoFormTester Tupiniquim: Content script já injetado.");
         return;
     }
     window.hasAutoFormTester = true;
 
-    console.log("AutoFormTester Tupiniquim: Content script carregado v1.6.0.");
+    console.log("AutoFormTester Tupiniquim: Content script carregado v1.7.1.");
 
-    // Lista de campos de rastreamento e metadados que DEVEM ser ignorados para evitar SPAM
+    // Armazena o nome preenchido no formulário para usar no e-mail
+    let nameFromForm = "";
+
+    // ─── Delay humanizado entre campos (1.2s ~ 3.5s) ───────────────────────
+    function humanDelay(min = 1200, max = 3500) {
+        return new Promise(r => setTimeout(r, min + Math.random() * (max - min)));
+    }
+
+    // ─── Campos de rastreamento / honeypot a ignorar ────────────────────────
     const trackingFields = [
-        "matchtype", "device", "adposition", "placement", "targetid", "feeditemid", 
-        "adgroupid", "target", "gclid", "origem", "utm_term", "utm_content", 
-        "utm_id", "utm_source_platform", "utm_source", "utm_campaign", 
-        "devicemodel", "utm_medium", "form_name", "site_domain", "page_path", 
+        "matchtype", "device", "adposition", "placement", "targetid", "feeditemid",
+        "adgroupid", "target", "gclid", "origem", "utm_term", "utm_content",
+        "utm_id", "utm_source_platform", "utm_source", "utm_campaign",
+        "devicemodel", "utm_medium", "form_name", "site_domain", "page_path",
         "page_url", "ultima_url_campanha"
     ];
 
-    // Função para gerar valores de teste genéricos
-    function generateGenericValue(field, formName = "", userName = "") {
-        const type = field.type ? field.type.toLowerCase() : "";
-        const name = field.name ? field.name.toLowerCase() : "";
-        const id = field.id ? field.id.toLowerCase() : "";
-        const placeholder = field.placeholder ? field.placeholder.toLowerCase() : "";
+    const honeypotKeywords = [
+        "honeypot", "bot", "spam", "hidden", "extra", "dummy", "fake",
+        "trap", "captcha", "confirm_email", "email_confirm", "fax",
+        "website_url", "url_site", "_gotcha", "hp_", "h-captcha",
+        "handle", "submit-response", "submit_response"
+    ];
 
-        // 1. Verificar se é um campo de rastreamento (Ignorar sempre)
-        const isTrackingField = trackingFields.some(keyword => 
-            name.includes(keyword) || id.includes(keyword)
+    function isTrackingOrHoneypot(field) {
+        const name = (field.name || "").toLowerCase();
+        const id   = (field.id   || "").toLowerCase();
+        const ph   = (field.placeholder || "").toLowerCase();
+        const cls  = (field.className || "").toLowerCase();
+
+        const style = field.getAttribute("style") || "";
+        if (/display\s*:\s*none|visibility\s*:\s*hidden/.test(style)) return true;
+
+        const rect = field.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return true;
+
+        return (
+            trackingFields.some(k => name.includes(k) || id.includes(k)) ||
+            honeypotKeywords.some(k => name.includes(k) || id.includes(k) || ph.includes(k) || cls.includes(k))
         );
+    }
 
-        if (isTrackingField) {
-            console.log(`AutoFormTester Tupiniquim: Ignorando campo de rastreamento/metadados: ${name || id}`);
+    // ─── Geração de valores de teste ────────────────────────────────────────
+    function generateValue(field, formName = "", userName = "") {
+        if (isTrackingOrHoneypot(field)) {
+            console.log("AutoFormTester: Ignorando honeypot/rastreamento:", field.name || field.id);
             return null;
         }
 
-        // 2. Lógica para campos ocultos (Hidden)
-        if (type === "hidden") {
-            // Ignorar campos ocultos que pareçam tokens de segurança ou honeypots
-            // Se o usuário quiser preencher UTMs específicos, ele deve fazer via URL, não via extensão automática em campos hidden
-            if (name.includes("csrf") || name.includes("token") || name.includes("session") || name.includes("hash")) {
-                console.log(`AutoFormTester Tupiniquim: Ignorando campo de segurança oculto: ${name}`);
-                return null;
-            }
-            
-            // Se for um campo hidden genérico (não rastreamento nem segurança), podemos tentar preencher, 
-            // mas o ideal é ignorar para evitar gatilhos de spam em campos "honeypot"
-            console.log(`AutoFormTester Tupiniquim: Ignorando campo oculto genérico (possível honeypot): ${name || id}`);
-            return null;
-        }
+        const type = (field.type || "").toLowerCase();
+        const name = (field.name || "").toLowerCase();
+        const id   = (field.id   || "").toLowerCase();
+        const ph   = (field.placeholder || "").toLowerCase();
+        const key  = name + id + ph;
 
-        // 3. Prioridade por tipo de campo
+        if (type === "hidden") return null;
+
         switch (type) {
-            case "email":
-                const randomNum = Math.floor(Math.random() * 10000);
-                const emailPrefix = (userName || "teste_tupiniquim").toLowerCase().normalize("NFD").replace(/[^a-zA-Z0-9]/g, "");
-                return `${emailPrefix}${randomNum}@email.com`;
+            case "email": {
+                const baseName = nameFromForm || userName || "tupiniquim";
+                const prefix = baseName
+                    .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                    .replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
+                return prefix + "@tupiniquim.com";
+            }
             case "tel":
-            case "phone":
-                // Número realista com DDD e variação para evitar padrão spam óbvio
-                const ddd = 11; // Você pode ajustar para a região desejada
-                const first = 90000 + Math.floor(Math.random() * 9999);
-                const second = 1000 + Math.floor(Math.random() * 8999);
-                return `${ddd}${first}${second}`;
-            case "url":
-                return "https://www.tupiniquim.com.br";
-            case "number":
-                return "12345";
-            case "date":
-                return "2025-01-01";
-            case "time":
-                return "12:30";
+            case "phone": {
+                const ddds = [11, 21, 31, 41, 51];
+                const ddd  = ddds[Math.floor(Math.random() * ddds.length)];
+                const p1   = 90000 + Math.floor(Math.random() * 9999);
+                const p2   = 1000  + Math.floor(Math.random() * 8999);
+                return "(" + ddd + ") " + String(p1).slice(0, 5) + "-" + p2;
+            }
+            case "url":      return "https://www.tupiniquim.com.br";
+            case "number":   return "42";
+            case "date":     return "2025-06-15";
+            case "time":     return "10:00";
             case "checkbox":
-            case "radio":
-                return true;
-            default:
-                // 4. Prioridade por nome/id/placeholder do campo
-                if (name.includes("nome") || id.includes("nome") || name.includes("name") || id.includes("name") || placeholder.includes("nome") || placeholder.includes("name")) {
-                    const formSuffix = formName ? ` (${formName})` : "";
-                    return `${userName || "Teste Tupiniquim Bruno"}${formSuffix}`;
-                }
-                if (name.includes("sobrenome") || id.includes("sobrenome") || name.includes("lastname") || id.includes("lastname") || placeholder.includes("sobrenome") || placeholder.includes("lastname")) {
-                    return "da Silva Teste";
-                }
-                if (name.includes("email") || id.includes("email") || placeholder.includes("email") || name.includes("e-mail") || id.includes("e-mail") || placeholder.includes("e-mail")) {
-                    const randomNum = Math.floor(Math.random() * 10000);
-                    return `teste${randomNum}@email.com`;
-                }
-                if (isPhoneField(field)) {
-                    return "11980311888";
-                }
-                if (name.includes("cep") || id.includes("cep") || name.includes("zipcode") || id.includes("zipcode") || placeholder.includes("cep") || placeholder.includes("zipcode")) {
-                    return "01001000";
-                }
-                if (name.includes("endereco") || id.includes("endereco") || name.includes("address") || id.includes("address") || placeholder.includes("endereco") || placeholder.includes("address")) {
-                    return "Rua dos Testes, 123";
-                }
-                if (name.includes("cidade") || id.includes("cidade") || name.includes("city") || id.includes("city") || placeholder.includes("cidade") || placeholder.includes("city")) {
-                    return "São Paulo";
-                }
-                if (name.includes("estado") || id.includes("estado") || name.includes("state") || id.includes("state") || placeholder.includes("estado") || placeholder.includes("state")) {
-                    return "SP";
-                }
-                if (name.includes("mensagem") || id.includes("mensagem") || name.includes("message") || id.includes("message") || placeholder.includes("mensagem") || placeholder.includes("message")) {
-                    const samples = [
-                        "Olá, solicito contato para mais informações sobre seus serviços.",
-                        "Por favor, envie detalhes sobre propostas e valores.",
-                        "Interessado em atendimento e orçamento; aguardo retorno.",
-                        "Preciso de suporte para fechamento de proposta, obrigado."
-                    ];
-                    return samples[Math.floor(Math.random() * samples.length)];
-                }
-                if (name.includes("empresa") || id.includes("empresa") || name.includes("company") || id.includes("company") || placeholder.includes("empresa") || placeholder.includes("company")) {
-                    return "Empresa Tupiniquim Ltda.";
-                }
-                if (name.includes("cpf") || id.includes("cpf") || placeholder.includes("cpf")) {
-                    return "12345678900";
-                }
-                if (name.includes("cnpj") || id.includes("cnpj") || placeholder.includes("cnpj")) {
-                    return "12345678000190";
-                }
-                
-                return "teste_tupiniquim";
-        }
-    }
-
-    // Função para simular digitação realística
-    async function simulateTyping(field, value, delay = 30) {
-        field.focus();
-        
-        // Disparar evento de foco
-        field.dispatchEvent(new Event("focus", { bubbles: true }));
-        
-        // Limpar o campo antes de digitar
-        field.value = "";
-        field.dispatchEvent(new Event("input", { bubbles: true }));
-
-        for (let i = 0; i < value.length; i++) {
-            const char = value[i];
-            const charCode = char.charCodeAt(0);
-
-            // Eventos de teclado
-            const events = ["keydown", "keypress", "keyup"];
-            events.forEach(type => {
-                const event = new KeyboardEvent(type, {
-                    key: char,
-                    char: char,
-                    keyCode: charCode,
-                    which: charCode,
-                    bubbles: true,
-                    cancelable: true
-                });
-                field.dispatchEvent(event);
-            });
-
-            // Adicionar o caractere e disparar input
-            field.value += char;
-            field.dispatchEvent(new Event("input", { bubbles: true }));
-
-            // Pequeno atraso variável para parecer humano
-            await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 20));
+            case "radio":    return true;
         }
 
-        // Finalizar com change e blur
-        field.dispatchEvent(new Event("change", { bubbles: true }));
-        field.dispatchEvent(new Event("blur", { bubbles: true }));
+        if (/nome|name|fullname|first.?name/.test(key)) {
+            const suffix = formName ? " (" + formName + ")" : "";
+            const nameVal = (userName || "Bruno MEireles") + suffix;
+            // Salva o nome SEM sufixo para usar no e-mail
+            nameFromForm = userName || "Bruno MEireles";
+            return nameVal;
+        }
+        if (/sobrenome|lastname|last.?name/.test(key)) return "Tupiniquim";
+        if (/email|e-mail/.test(key)) {
+            const baseName = nameFromForm || userName || "tupiniquim";
+            const prefix = baseName
+                .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/\s+/g, "").replace(/[^a-z0-9]/g, "");
+            return prefix + "@tupiniquim.com";
+        }
+        if (isPhoneField(field)) {
+            const ddds = [11, 21, 31];
+            const ddd  = ddds[Math.floor(Math.random() * ddds.length)];
+            const p1   = 90000 + Math.floor(Math.random() * 9999);
+            const p2   = 1000  + Math.floor(Math.random() * 8999);
+            return "(" + ddd + ") " + String(p1).slice(0, 5) + "-" + p2;
+        }
+        if (/cep|zipcode/.test(key))      return "01310-100";
+        if (/endereco|address/.test(key)) return "Av. Paulista, 1000";
+        if (/cidade|city/.test(key))      return "São Paulo";
+        if (/estado|state/.test(key))     return "SP";
+        if (/empresa|company/.test(key))  return "Tupiniquim Ltda.";
+        if (/cpf/.test(key))              return "123.456.789-00";
+        if (/cnpj/.test(key))             return "12.345.678/0001-90";
+        if (/mensagem|message|assunto|subject|comment|descri/.test(key)) {
+            const msgs = [
+                "Olá, gostaria de receber mais informações sobre os serviços disponíveis.",
+                "Boa tarde! Pode me enviar detalhes sobre propostas e valores?",
+                "Tenho interesse em conhecer melhor as soluções que vocês oferecem.",
+                "Preciso de um orçamento para meu projeto. Podem entrar em contato?",
+                "Quero saber mais sobre as opções disponíveis para minha empresa."
+            ];
+            return msgs[Math.floor(Math.random() * msgs.length)];
+        }
+
+        return "Tupiniquim Teste";
     }
 
-    // Detectar campos de telefone
     function isPhoneField(field) {
-        const type = field.type ? field.type.toLowerCase() : "";
-        const name = field.name ? field.name.toLowerCase() : "";
-        const id = field.id ? field.id.toLowerCase() : "";
-        const placeholder = field.placeholder ? field.placeholder.toLowerCase() : "";
-        
-        const keywords = ["telefone", "phone", "whatsapp", "celular", "mobile", "tel"];
-        return type === "tel" || keywords.some(kw => name.includes(kw) || id.includes(kw) || placeholder.includes(kw));
+        const key = ((field.type || "") + (field.name || "") + (field.id || "") + (field.placeholder || "")).toLowerCase();
+        return /tel|telefone|phone|whatsapp|celular|mobile/.test(key);
     }
 
-    async function fillField(field, formName = "", userName = "") {
-        if (field.disabled || field.readOnly) return;
+    // ─── Digitação humanizada com suporte a React/Vue ───────────────────────
+    async function simulateTyping(field, value) {
+        await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
 
-        const tagName = field.tagName.toLowerCase();
-        const type = field.type ? field.type.toLowerCase() : "";
-        const name = field.name ? field.name.toLowerCase() : "";
-        const id = field.id ? field.id.toLowerCase() : "";
-        const placeholder = field.placeholder ? field.placeholder.toLowerCase() : "";
+        field.focus();
+        field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
 
-        const isNameField = /nome|name|fullname|first.*name|last.*name/.test(name + id + placeholder);
-        const isEmailField = type === "email" || /email|e-mail/.test(name + id + placeholder);
+        field.value = "";
+        triggerReactInput(field, "");
 
-        // Não sobrescreve nome e e-mail já preenchidos pelo usuário
-        if ((isNameField || isEmailField) && field.value.trim() !== "") {
-            return;
+        const chars = String(value).split("");
+        for (let i = 0; i < chars.length; i++) {
+            const char = chars[i];
+            const code = char.charCodeAt(0);
+
+            field.dispatchEvent(new KeyboardEvent("keydown", {
+                key: char, keyCode: code, which: code,
+                bubbles: true, cancelable: true
+            }));
+
+            field.value += char;
+            triggerReactInput(field, field.value);
+
+            field.dispatchEvent(new KeyboardEvent("keyup", {
+                key: char, keyCode: code, which: code,
+                bubbles: true, cancelable: true
+            }));
+
+            const base = isPhoneField(field) ? 80 : 55;
+            await new Promise(r => setTimeout(r, base + Math.random() * 65));
+
+            if (i > 0 && i % 7 === 0) {
+                await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
+            }
         }
 
-        if (tagName === "input" || tagName === "textarea") {
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+        field.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+    }
+
+    function triggerReactInput(field, value) {
+        const proto = field.tagName === "TEXTAREA"
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+        const nativeSetter = Object.getOwnPropertyDescriptor(proto, "value");
+        if (nativeSetter && nativeSetter.set) {
+            nativeSetter.set.call(field, value);
+        }
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // ─── Preencher um campo ──────────────────────────────────────────────────
+    async function fillField(field, formName, userName) {
+        if (field.disabled || field.readOnly) return false;
+
+        const tag  = field.tagName.toLowerCase();
+        const type = (field.type || "").toLowerCase();
+        const key  = ((field.name || "") + (field.id || "") + (field.placeholder || "")).toLowerCase();
+
+        if (/nome|name|email|e-mail/.test(key) && field.value.trim() !== "") return false;
+
+        if (tag === "input" || tag === "textarea") {
             if (type === "checkbox" || type === "radio") {
                 if (!field.checked) {
                     field.checked = true;
                     field.dispatchEvent(new MouseEvent("click", { bubbles: true }));
                     field.dispatchEvent(new Event("change", { bubbles: true }));
+                    return true;
                 }
-            } else if (!["submit", "reset", "button", "file"].includes(type)) {
-                const value = generateGenericValue(field, formName, userName);
-                if (value !== null) {
-                    await simulateTyping(field, value, isPhoneField(field) ? 50 : 20);
-                }
+                return false;
             }
-        } else if (tagName === "select") {
-            let selectedIndex = -1;
+            if (["submit", "reset", "button", "file", "image"].includes(type)) return false;
+
+            const value = generateValue(field, formName, userName);
+            if (value === null) return false;
+
+            const before = field.value;
+            await simulateTyping(field, value);
+            return field.value !== before;
+
+        } else if (tag === "select") {
             for (let i = 0; i < field.options.length; i++) {
                 if (!field.options[i].disabled && field.options[i].value !== "") {
-                    selectedIndex = i;
-                    break;
+                    field.selectedIndex = i;
+                    field.dispatchEvent(new Event("change", { bubbles: true }));
+                    return true;
                 }
             }
-            if (selectedIndex !== -1) {
-                field.selectedIndex = selectedIndex;
-                field.dispatchEvent(new Event("change", { bubbles: true }));
-            }
         }
+        return false;
     }
 
     function highlightField(field) {
-        const originalBorder = field.style.border;
-        const originalBoxShadow = field.style.boxShadow;
-        
-        field.style.border = "2px solid #007bff";
-        field.style.boxShadow = "0 0 8px rgba(0, 123, 255, 0.6)";
+        const origBorder    = field.style.border;
+        const origBoxShadow = field.style.boxShadow;
+        field.style.border     = "2px solid #28a745";
+        field.style.boxShadow  = "0 0 8px rgba(40,167,69,0.6)";
         field.style.transition = "all 0.3s ease-in-out";
-        
-        // Manter o destaque por alguns segundos
         setTimeout(() => {
-            field.style.border = originalBorder;
-            field.style.boxShadow = originalBoxShadow;
-        }, 5000);
+            field.style.border    = origBorder;
+            field.style.boxShadow = origBoxShadow;
+        }, 4000);
     }
 
+    // ─── Função principal ────────────────────────────────────────────────────
     async function autoFillForms(userName) {
-        console.log("AutoFormTester Tupiniquim: Iniciando preenchimento para:", userName);
-        
-        // Capturar todos os elementos de entrada possíveis
-        const allFields = document.querySelectorAll("input, textarea, select");
-        let filledCount = 0;
+        console.log("AutoFormTester Tupiniquim v1.7.1: Iniciando para:", userName);
+        nameFromForm = ""; // Resetar a cada execução
+
+        const allFields = Array.from(document.querySelectorAll("input, textarea, select"));
+        let filled = 0;
 
         for (const field of allFields) {
-            // Verificar se o campo é visível (heurística simples)
-            const style = window.getComputedStyle(field);
-            const isVisible = style.display !== 'none' && style.visibility !== 'hidden' && field.type !== 'hidden';
-            
-            // Se for hidden, a função fillField/generateGenericValue já trata o filtro de spam
-            // Se for visível, preenchemos normalmente
-            
-            const form = field.closest("form");
-            const formName = form ? (form.name || form.id || form.getAttribute("data-name") || "") : "";
-            
-            // Armazenar valor antigo para comparar se mudou
-            const oldVal = field.value;
-            
-            await fillField(field, formName, userName);
-            
-            // Se o valor mudou ou se é checkbox/radio marcado, contamos como preenchido
-            if (field.value !== oldVal || field.checked) {
+            const cs = window.getComputedStyle(field);
+            if (cs.display === "none" || cs.visibility === "hidden") continue;
+            if (field.type === "hidden") continue;
+
+            const form     = field.closest("form");
+            const formName = form
+                ? (form.name || form.id || form.getAttribute("data-name") || form.getAttribute("aria-label") || "")
+                : "";
+
+            const changed = await fillField(field, formName, userName);
+
+            if (changed) {
                 highlightField(field);
-                filledCount++;
+                filled++;
+                await humanDelay(1200, 3500);
             }
         }
-        
-        console.log(`AutoFormTester Tupiniquim: Preenchimento concluído. ${filledCount} campos processados.`);
-        return filledCount;
+
+        console.log("AutoFormTester Tupiniquim: Concluído.", filled, "campos preenchidos.");
+        return filled;
     }
 
+    // ─── Listener ───────────────────────────────────────────────────────────
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "ping") {
             sendResponse({ status: "ready" });
         } else if (request.action === "fillForms") {
             autoFillForms(request.userName).then(count => {
-                sendResponse({ status: "Forms filled", count: count });
+                sendResponse({ status: "Forms filled", count });
             });
-            return true; // Manter canal aberto para resposta assíncrona
+            return true;
         }
     });
 

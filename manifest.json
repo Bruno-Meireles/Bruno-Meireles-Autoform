@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AutoFormTester Tupiniquim",
-  "version": "1.6.0",
+  "version": "1.7.1",
   "description": "Preenche automaticamente formulários com dados de teste, incluindo UTMs e campos ocultos, e destaca os campos preenchidos. Agora com popup para copiar URLs e controle manual.",
   "permissions": [
     "activeTab",
