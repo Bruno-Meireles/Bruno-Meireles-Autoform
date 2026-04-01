@@ -59,7 +59,11 @@
                 return `${emailPrefix}${randomNum}@email.com`;
             case "tel":
             case "phone":
-                return "11980311888"; // Número fixo solicitado pelo usuário
+                // Número realista com DDD e variação para evitar padrão spam óbvio
+                const ddd = 11; // Você pode ajustar para a região desejada
+                const first = 90000 + Math.floor(Math.random() * 9999);
+                const second = 1000 + Math.floor(Math.random() * 8999);
+                return `${ddd}${first}${second}`;
             case "url":
                 return "https://www.tupiniquim.com.br";
             case "number":
@@ -100,7 +104,13 @@
                     return "SP";
                 }
                 if (name.includes("mensagem") || id.includes("mensagem") || name.includes("message") || id.includes("message") || placeholder.includes("mensagem") || placeholder.includes("message")) {
-                    return "Esta é uma mensagem de teste gerada pelo AutoFormTester Tupiniquim.";
+                    const samples = [
+                        "Olá, solicito contato para mais informações sobre seus serviços.",
+                        "Por favor, envie detalhes sobre propostas e valores.",
+                        "Interessado em atendimento e orçamento; aguardo retorno.",
+                        "Preciso de suporte para fechamento de proposta, obrigado."
+                    ];
+                    return samples[Math.floor(Math.random() * samples.length)];
                 }
                 if (name.includes("empresa") || id.includes("empresa") || name.includes("company") || id.includes("company") || placeholder.includes("empresa") || placeholder.includes("company")) {
                     return "Empresa Tupiniquim Ltda.";
@@ -174,6 +184,17 @@
 
         const tagName = field.tagName.toLowerCase();
         const type = field.type ? field.type.toLowerCase() : "";
+        const name = field.name ? field.name.toLowerCase() : "";
+        const id = field.id ? field.id.toLowerCase() : "";
+        const placeholder = field.placeholder ? field.placeholder.toLowerCase() : "";
+
+        const isNameField = /nome|name|fullname|first.*name|last.*name/.test(name + id + placeholder);
+        const isEmailField = type === "email" || /email|e-mail/.test(name + id + placeholder);
+
+        // Não sobrescreve nome e e-mail já preenchidos pelo usuário
+        if ((isNameField || isEmailField) && field.value.trim() !== "") {
+            return;
+        }
 
         if (tagName === "input" || tagName === "textarea") {
             if (type === "checkbox" || type === "radio") {
