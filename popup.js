@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 2000);
     }
 
-    // Função para aguardar que o content script esteja pronto
+    // Funcao para aguardar que o content script esteja pronto
     async function waitForContentScript(tabId, maxAttempts = 10) {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -81,6 +81,31 @@ document.addEventListener("DOMContentLoaded", function () {
         return false;
     }
 
+    async function chooseCandidateIfNeeded(tabId) {
+        const response = await chrome.tabs.sendMessage(tabId, { action: "getFormCandidates" });
+        const candidates = response && Array.isArray(response.candidates) ? response.candidates : [];
+        if (!candidates.length) return null;
+
+        const hasHighConfidence = candidates.some(c => c.selectedByDefault);
+        if (hasHighConfidence || candidates.length === 1) return candidates[0].index;
+
+        const optionsText = candidates
+            .map((c, i) => `${i + 1}. ${c.title} (${c.fieldCount} campos, score ${c.score})`)
+            .join("\n");
+        const picked = window.prompt(
+            "Escolha o formulario para preencher:\n" + optionsText + "\n\nDigite o numero desejado:",
+            "1"
+        );
+
+        if (picked === null) return null;
+        const parsed = Number.parseInt(picked, 10);
+        if (Number.isNaN(parsed) || parsed < 1 || parsed > candidates.length) {
+            showSuccessMessage("Selecao invalida. Usando o formulario principal.");
+            return candidates[0].index;
+        }
+        return candidates[parsed - 1].index;
+    }
+
     // Função para preencher formulário
     fillButton.addEventListener("click", async function () {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -92,23 +117,26 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         try {
-            console.log("AutoFormTester Tupiniquim: Executando content script.");
-            // Injeta o content script e aguarda sua execução
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ["scripts/content.js"],
-            });
-
-            // Aguarda que o content script esteja pronto para receber mensagens
+            console.log("AutoFormTester Tupiniquim: Validando content script.");
             const isReady = await waitForContentScript(tab.id);
             if (!isReady) {
                 throw new Error("Content script não está respondendo após várias tentativas.");
             }
 
+            const selectedIndex = await chooseCandidateIfNeeded(tab.id);
+            if (selectedIndex === null) {
+                showSuccessMessage("Preenchimento cancelado.");
+                return;
+            }
+
             console.log("AutoFormTester Tupiniquim: Enviando mensagem para content script.");
-            const response = await chrome.tabs.sendMessage(tab.id, { action: "fillForms", userName: userName });
+            const response = await chrome.tabs.sendMessage(tab.id, {
+                action: "fillForms",
+                userName: userName,
+                selectedIndex
+            });
             console.log("AutoFormTester Tupiniquim: Resposta do content script:", response);
-            if (response && response.status === "Forms filled") {
+            if (response && response.status === "Forms filled" && Number(response.count) > 0) {
                 showSuccessMessage("Formulário preenchido com sucesso!");
                 setTimeout(() => window.close(), 1500);
             } else {

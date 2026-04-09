@@ -1,6 +1,5 @@
-// AutoFormTester Tupiniquim - Content Script v1.7.1
-// Correção anti-SPAM: delays humanizados, honeypot expandido, React/Vue support
-// v1.7.1: e-mail gerado a partir do nome preenchido no formulário
+// AutoFormTester Tupiniquim - Content Script v1.8.0
+// Otimizacoes: selecao de formulario, preenchimento rapido, estabilidade visual
 
 (function() {
     if (window.hasAutoFormTester) {
@@ -9,13 +8,11 @@
     }
     window.hasAutoFormTester = true;
 
-    console.log("AutoFormTester Tupiniquim: Content script carregado v1.7.1.");
+    console.log("AutoFormTester Tupiniquim: Content script carregado v1.8.0.");
 
-    // Armazena o nome preenchido no formulário para usar no e-mail
     let nameFromForm = "";
 
-    // ─── Delay humanizado entre campos (1.2s ~ 3.5s) ───────────────────────
-    function humanDelay(min = 1200, max = 3500) {
+    function shortDelay(min = 90, max = 220) {
         return new Promise(r => setTimeout(r, min + Math.random() * (max - min)));
     }
 
@@ -40,6 +37,9 @@
         const id   = (field.id   || "").toLowerCase();
         const ph   = (field.placeholder || "").toLowerCase();
         const cls  = (field.className || "").toLowerCase();
+        const type = (field.type || "").toLowerCase();
+
+        if (type === "hidden") return true;
 
         const style = field.getAttribute("style") || "";
         if (/display\s*:\s*none|visibility\s*:\s*hidden/.test(style)) return true;
@@ -51,6 +51,14 @@
             trackingFields.some(k => name.includes(k) || id.includes(k)) ||
             honeypotKeywords.some(k => name.includes(k) || id.includes(k) || ph.includes(k) || cls.includes(k))
         );
+    }
+
+    function isActuallyVisible(field) {
+        if (!field || !field.isConnected) return false;
+        const cs = window.getComputedStyle(field);
+        if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return false;
+        const rect = field.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
     }
 
     // ─── Geração de valores de teste ────────────────────────────────────────
@@ -65,8 +73,6 @@
         const id   = (field.id   || "").toLowerCase();
         const ph   = (field.placeholder || "").toLowerCase();
         const key  = name + id + ph;
-
-        if (type === "hidden") return null;
 
         switch (type) {
             case "email": {
@@ -140,45 +146,13 @@
         return /tel|telefone|phone|whatsapp|celular|mobile/.test(key);
     }
 
-    // ─── Digitação humanizada com suporte a React/Vue ───────────────────────
-    async function simulateTyping(field, value) {
-        await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-
+    async function setFieldValueFast(field, value) {
         field.focus();
         field.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
-
-        field.value = "";
-        triggerReactInput(field, "");
-
-        const chars = String(value).split("");
-        for (let i = 0; i < chars.length; i++) {
-            const char = chars[i];
-            const code = char.charCodeAt(0);
-
-            field.dispatchEvent(new KeyboardEvent("keydown", {
-                key: char, keyCode: code, which: code,
-                bubbles: true, cancelable: true
-            }));
-
-            field.value += char;
-            triggerReactInput(field, field.value);
-
-            field.dispatchEvent(new KeyboardEvent("keyup", {
-                key: char, keyCode: code, which: code,
-                bubbles: true, cancelable: true
-            }));
-
-            const base = isPhoneField(field) ? 80 : 55;
-            await new Promise(r => setTimeout(r, base + Math.random() * 65));
-
-            if (i > 0 && i % 7 === 0) {
-                await new Promise(r => setTimeout(r, 150 + Math.random() * 300));
-            }
-        }
-
+        triggerReactInput(field, String(value));
         field.dispatchEvent(new Event("change", { bubbles: true }));
-        await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
         field.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+        await shortDelay(40, 100);
     }
 
     function triggerReactInput(field, value) {
@@ -192,9 +166,10 @@
         field.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
-    // ─── Preencher um campo ──────────────────────────────────────────────────
     async function fillField(field, formName, userName) {
         if (field.disabled || field.readOnly) return false;
+        if (!isActuallyVisible(field)) return false;
+        if (isTrackingOrHoneypot(field)) return false;
 
         const tag  = field.tagName.toLowerCase();
         const type = (field.type || "").toLowerCase();
@@ -212,13 +187,13 @@
                 }
                 return false;
             }
-            if (["submit", "reset", "button", "file", "image"].includes(type)) return false;
+            if (["submit", "reset", "button", "file", "image", "hidden"].includes(type)) return false;
 
             const value = generateValue(field, formName, userName);
             if (value === null) return false;
 
             const before = field.value;
-            await simulateTyping(field, value);
+            await setFieldValueFast(field, value);
             return field.value !== before;
 
         } else if (tag === "select") {
@@ -234,54 +209,137 @@
     }
 
     function highlightField(field) {
-        const origBorder    = field.style.border;
-        const origBoxShadow = field.style.boxShadow;
-        field.style.border     = "2px solid #28a745";
-        field.style.boxShadow  = "0 0 8px rgba(40,167,69,0.6)";
-        field.style.transition = "all 0.3s ease-in-out";
+        const origOutline = field.style.outline;
+        const origOffset = field.style.outlineOffset;
+        const origShadow = field.style.boxShadow;
+        field.style.outline = "2px solid #28a745";
+        field.style.outlineOffset = "1px";
+        field.style.boxShadow = "0 0 0 3px rgba(40,167,69,0.25)";
         setTimeout(() => {
-            field.style.border    = origBorder;
-            field.style.boxShadow = origBoxShadow;
-        }, 4000);
+            field.style.outline = origOutline;
+            field.style.outlineOffset = origOffset;
+            field.style.boxShadow = origShadow;
+        }, 2200);
     }
 
-    // ─── Função principal ────────────────────────────────────────────────────
-    async function autoFillForms(userName) {
-        console.log("AutoFormTester Tupiniquim v1.7.1: Iniciando para:", userName);
-        nameFromForm = ""; // Resetar a cada execução
+    function waitForDomSettling(timeoutMs = 1200) {
+        return new Promise(resolve => {
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                observer.disconnect();
+                resolve();
+            };
+            const observer = new MutationObserver(() => {
+                clearTimeout(timer);
+                timer = setTimeout(finish, 250);
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+            let timer = setTimeout(finish, timeoutMs);
+        });
+    }
 
-        const allFields = Array.from(document.querySelectorAll("input, textarea, select"));
+    function fieldScore(field) {
+        const key = ((field.name || "") + " " + (field.id || "") + " " + (field.placeholder || "") + " " + (field.className || "")).toLowerCase();
+        let score = 0;
+        if (/nome|name/.test(key)) score += 3;
+        if (/email|e-mail/.test(key)) score += 3;
+        if (/tel|telefone|phone|celular|whatsapp/.test(key)) score += 2;
+        if (/mensagem|message|comment|assunto|subject/.test(key)) score += 2;
+        if (/busca|search/.test(key)) score -= 4;
+        return score;
+    }
+
+    function formPenalty(formEl) {
+        const key = ((formEl.id || "") + " " + (formEl.className || "") + " " + (formEl.getAttribute("aria-label") || "")).toLowerCase();
+        let penalty = 0;
+        if (/whatsapp|floating|chat|widget/.test(key)) penalty += 6;
+        if (/newsletter/.test(key)) penalty += 3;
+        if (/login|signin|search|busca/.test(key)) penalty += 5;
+        return penalty;
+    }
+
+    function getCandidateForms() {
+        const forms = Array.from(document.querySelectorAll("form"));
+        const candidates = [];
+        for (const form of forms) {
+            if (!isActuallyVisible(form)) continue;
+            const fields = Array.from(form.querySelectorAll("input, textarea, select"))
+                .filter(f => !f.disabled && !f.readOnly && !isTrackingOrHoneypot(f) && isActuallyVisible(f));
+            if (!fields.length) continue;
+
+            let score = 0;
+            score += Math.min(fields.length, 8);
+            const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+            if (submit && isActuallyVisible(submit)) score += 5;
+            for (const field of fields) score += fieldScore(field);
+            score -= formPenalty(form);
+
+            const title = (form.getAttribute("aria-label") || form.getAttribute("name") || form.id || "").trim() || "Formulario";
+            candidates.push({ form, fields, score, title });
+        }
+        candidates.sort((a, b) => b.score - a.score);
+        return candidates;
+    }
+
+    function getFormCandidatesForPopup() {
+        const candidates = getCandidateForms();
+        const best = candidates[0];
+        const second = candidates[1];
+        const confidence = best ? (second ? best.score - second.score : best.score) : 0;
+        return candidates.slice(0, 8).map((item, index) => ({
+            index,
+            score: item.score,
+            title: item.title,
+            fieldCount: item.fields.length,
+            selectedByDefault: index === 0 && confidence >= 3
+        }));
+    }
+
+    async function autoFillForms(userName, selectedIndex = null) {
+        console.log("AutoFormTester Tupiniquim v1.8.0: Iniciando para:", userName);
+        nameFromForm = "";
+        await waitForDomSettling(1200);
+        const candidates = getCandidateForms();
+        if (!candidates.length) return 0;
+        const target = Number.isInteger(selectedIndex) && candidates[selectedIndex]
+            ? candidates[selectedIndex]
+            : candidates[0];
+
+        const form = target.form;
+        const formName = form
+            ? (form.name || form.id || form.getAttribute("data-name") || form.getAttribute("aria-label") || "")
+            : "";
+        const fields = target.fields;
         let filled = 0;
 
-        for (const field of allFields) {
-            const cs = window.getComputedStyle(field);
-            if (cs.display === "none" || cs.visibility === "hidden") continue;
-            if (field.type === "hidden") continue;
-
-            const form     = field.closest("form");
-            const formName = form
-                ? (form.name || form.id || form.getAttribute("data-name") || form.getAttribute("aria-label") || "")
-                : "";
-
+        for (const field of fields) {
             const changed = await fillField(field, formName, userName);
-
             if (changed) {
                 highlightField(field);
                 filled++;
-                await humanDelay(1200, 3500);
+                await shortDelay(90, 220);
             }
         }
 
-        console.log("AutoFormTester Tupiniquim: Concluído.", filled, "campos preenchidos.");
+        console.log("AutoFormTester Tupiniquim: Concluido.", filled, "campos preenchidos.");
         return filled;
     }
 
-    // ─── Listener ───────────────────────────────────────────────────────────
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "ping") {
             sendResponse({ status: "ready" });
+        } else if (request.action === "getFormCandidates") {
+            waitForDomSettling(700).then(() => {
+                sendResponse({
+                    status: "ok",
+                    candidates: getFormCandidatesForPopup()
+                });
+            });
+            return true;
         } else if (request.action === "fillForms") {
-            autoFillForms(request.userName).then(count => {
+            autoFillForms(request.userName, request.selectedIndex).then(count => {
                 sendResponse({ status: "Forms filled", count });
             });
             return true;
