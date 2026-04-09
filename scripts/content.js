@@ -88,7 +88,7 @@
                 const ddd  = ddds[Math.floor(Math.random() * ddds.length)];
                 const p1   = 90000 + Math.floor(Math.random() * 9999);
                 const p2   = 1000  + Math.floor(Math.random() * 8999);
-                return "(" + ddd + ") " + String(p1).slice(0, 5) + "-" + p2;
+                return String(ddd) + String(p1).slice(0, 5) + "-" + p2;
             }
             case "url":      return "https://www.tupiniquim.com.br";
             case "number":   return "42";
@@ -118,7 +118,7 @@
             const ddd  = ddds[Math.floor(Math.random() * ddds.length)];
             const p1   = 90000 + Math.floor(Math.random() * 9999);
             const p2   = 1000  + Math.floor(Math.random() * 8999);
-            return "(" + ddd + ") " + String(p1).slice(0, 5) + "-" + p2;
+            return String(ddd) + String(p1).slice(0, 5) + "-" + p2;
         }
         if (/cep|zipcode/.test(key))      return "01310-100";
         if (/endereco|address/.test(key)) return "Av. Paulista, 1000";
