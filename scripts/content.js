@@ -11,6 +11,8 @@
     console.log("AutoFormTester Tupiniquim: Content script carregado v1.8.0.");
 
     let nameFromForm = "";
+    let hiddenFieldsRevealed = false;
+    const originalFieldStates = new Map();
 
     function shortDelay(min = 90, max = 220) {
         return new Promise(r => setTimeout(r, min + Math.random() * (max - min)));
@@ -327,6 +329,182 @@
         return filled;
     }
 
+    // ─── Detecção de plataforma de formulário ──────────────────────────────
+    function detectFormPlatform(field) {
+        const el = field.closest
+            ? (field.closest(".elementor-form, .elementor-field-group") ? "Elementor"
+            : field.closest(".fc-form, .fc-fieldset, [class*=\"formcraft\"]") ? "FormCraft"
+            : field.closest(".wpcf7-form, .wpcf7, [class*=\"wpcf7\"]") ? "CF7"
+            : "Genérico")
+            : "Genérico";
+        return el;
+    }
+
+    // ─── Revela todos os ancestrais ocultos do campo ───────────────────────
+    function revealAncestors(field) {
+        let parent = field.parentElement;
+        while (parent && parent !== document.body) {
+            const pcs = window.getComputedStyle(parent);
+            const isHiddenParent =
+                pcs.display === "none" ||
+                pcs.visibility === "hidden" ||
+                pcs.opacity === "0" ||
+                parent.getAttribute("style") && /display\s*:\s*none/i.test(parent.getAttribute("style") || "");
+
+            if (isHiddenParent) {
+                if (!originalFieldStates.has(parent)) {
+                    originalFieldStates.set(parent, {
+                        _isParent: true,
+                        display: parent.style.display,
+                        visibility: parent.style.visibility,
+                        opacity: parent.style.opacity,
+                        height: parent.style.height,
+                        overflow: parent.style.overflow,
+                        position: parent.style.position
+                    });
+                }
+                parent.style.setProperty("display", "block", "important");
+                parent.style.setProperty("visibility", "visible", "important");
+                parent.style.setProperty("opacity", "1", "important");
+                parent.style.setProperty("height", "auto", "important");
+                parent.style.setProperty("overflow", "visible", "important");
+            }
+            parent = parent.parentElement;
+        }
+    }
+
+    function toggleHiddenFields() {
+        hiddenFieldsRevealed = !hiddenFieldsRevealed;
+        console.log("AutoFormTester Tupiniquim: Alternando campos ocultos. Estado:", hiddenFieldsRevealed);
+
+        if (hiddenFieldsRevealed) {
+            // ── Passo 1: identificar todos os campos ocultos ──────────────
+            const allInputs = Array.from(document.querySelectorAll("input, select, textarea"));
+            const hiddenFields = allInputs.filter(field => {
+                if (field.type === "submit" || field.type === "reset" || field.type === "button" || field.type === "image") return false;
+                const cs = window.getComputedStyle(field);
+                return (
+                    field.type === "hidden" ||
+                    cs.display === "none" ||
+                    cs.visibility === "hidden" ||
+                    cs.opacity === "0" ||
+                    (field.offsetWidth === 0 && field.offsetHeight === 0)
+                );
+            });
+
+            console.log("AutoFormTester Tupiniquim:", hiddenFields.length, "campos ocultos encontrados.");
+
+            hiddenFields.forEach((field, index) => {
+                // Salva estado original do campo
+                if (!originalFieldStates.has(field)) {
+                    originalFieldStates.set(field, {
+                        _isField: true,
+                        type: field.type,
+                        display: field.style.display,
+                        visibility: field.style.visibility,
+                        opacity: field.style.opacity,
+                        border: field.style.border,
+                        background: field.style.background,
+                        minWidth: field.style.minWidth,
+                        minHeight: field.style.minHeight,
+                        position: field.style.position,
+                        zIndex: field.style.zIndex
+                    });
+                }
+
+                // ── Passo 2: revelar ancestrais ocultos primeiro ──────────
+                revealAncestors(field);
+
+                // ── Passo 3: revelar o próprio campo ─────────────────────
+                if (field.type === "hidden") field.type = "text";
+                field.style.setProperty("display", "inline-block", "important");
+                field.style.setProperty("visibility", "visible", "important");
+                field.style.setProperty("opacity", "1", "important");
+                field.style.setProperty("border", "2px dashed #007a42", "important");
+                field.style.setProperty("background", "#f0fff4", "important");
+                field.style.setProperty("min-width", "180px", "important");
+                field.style.setProperty("min-height", "28px", "important");
+                field.style.setProperty("color", "#1a1a1a", "important");
+                field.style.setProperty("position", "relative", "important");
+                field.style.setProperty("z-index", "999999", "important");
+                field.style.setProperty("margin", "4px 0", "important");
+                field.style.setProperty("padding", "4px 6px", "important");
+                field.style.setProperty("font-size", "12px", "important");
+                field.style.setProperty("box-sizing", "border-box", "important");
+
+                // ── Passo 4: etiqueta de identificação ───────────────────
+                const labelId = "tupiniquim-label-" + index;
+                if (!document.getElementById(labelId)) {
+                    const platform = detectFormPlatform(field);
+                    const fieldName = field.name || field.id || field.getAttribute("data-name") || "sem nome";
+                    const label = document.createElement("div");
+                    label.id = labelId;
+                    label.className = "tupiniquim-debug-label";
+                    label.style.cssText = [
+                        "font-size: 11px",
+                        "color: #fff",
+                        "font-weight: bold",
+                        "margin: 6px 0 2px 0",
+                        "display: block",
+                        "font-family: monospace, sans-serif",
+                        "background: #007a42",
+                        "padding: 3px 8px",
+                        "border-radius: 4px",
+                        "width: fit-content",
+                        "max-width: 320px",
+                        "z-index: 999999",
+                        "position: relative",
+                        "pointer-events: none",
+                        "white-space: nowrap",
+                        "overflow: hidden",
+                        "text-overflow: ellipsis",
+                        "box-shadow: 0 1px 4px rgba(0,0,0,.35)"
+                    ].join(" !important; ") + " !important;";
+                    label.textContent = "🔒 [" + platform + "] " + fieldName + (field.value ? " = \"" + field.value.slice(0, 30) + "\"" : "");
+
+                    // Insere a etiqueta antes do campo, ou antes do seu container se possível
+                    const insertTarget = field.parentNode || document.body;
+                    insertTarget.insertBefore(label, field);
+                }
+            });
+
+        } else {
+            // ── Restaura estado original de todos os elementos ────────────
+            originalFieldStates.forEach((state, el) => {
+                if (state._isField) {
+                    if (state.type !== undefined) {
+                        try { el.type = state.type; } catch (e) { /* read-only em alguns browsers */ }
+                    }
+                    el.style.display = state.display || "";
+                    el.style.visibility = state.visibility || "";
+                    el.style.opacity = state.opacity || "";
+                    el.style.border = state.border || "";
+                    el.style.background = state.background || "";
+                    el.style.minWidth = state.minWidth || "";
+                    el.style.minHeight = state.minHeight || "";
+                    el.style.position = state.position || "";
+                    el.style.zIndex = state.zIndex || "";
+                    el.style.margin = "";
+                    el.style.padding = "";
+                    el.style.fontSize = "";
+                } else if (state._isParent) {
+                    el.style.display = state.display || "";
+                    el.style.visibility = state.visibility || "";
+                    el.style.opacity = state.opacity || "";
+                    el.style.height = state.height || "";
+                    el.style.overflow = state.overflow || "";
+                    el.style.position = state.position || "";
+                }
+            });
+            originalFieldStates.clear();
+
+            // Remove todas as etiquetas
+            document.querySelectorAll(".tupiniquim-debug-label").forEach(label => label.remove());
+        }
+
+        return { revealed: hiddenFieldsRevealed, count: hiddenFieldsRevealed ? document.querySelectorAll(".tupiniquim-debug-label").length : 0 };
+    }
+
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === "ping") {
             sendResponse({ status: "ready" });
@@ -343,6 +521,10 @@
                 sendResponse({ status: "Forms filled", count });
             });
             return true;
+        } else if (request.action === "toggleHiddenFields") {
+            const result = toggleHiddenFields();
+            sendResponse({ status: "toggled", revealed: result.revealed, count: result.count });
+            return false;
         }
     });
 
